@@ -1,0 +1,230 @@
+----------------------------------------------------------------------------------
+Database commands
+----------------------------------------------------------------------------------
+Create a database:
+CREATE DATABASE IF NOT EXISTS database_name;
+
+List all databases:
+SHOW DATABASES;
+
+Use a specific database:
+USE database_name;
+
+Drop a database:
+DROP DATABASE IF EXISTS database_name [CASCADE | RESTRICT];
+CASCADE: Deletes all tables in the database.
+RESTRICT: Prevents the database from being dropped if it contains tables.
+
+Describe a database:
+DESCRIBE DATABASE database_name;
+----------------------------------------------------------------------------------
+Table Commands
+----------------------------------------------------------------------------------
+Create a regular table:
+----------------------------------------------------------------------------------
+CREATE TABLE table_name (
+column_name1 STRING,
+column_name2 INT
+) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE;
+Create a partitioned table:
+
+----------------------------------------------------------------------------------
+Create a partitioned table
+----------------------------------------------------------------------------------
+
+CREATE TABLE table_name (
+column_name1 STRING,
+column_name2 INT
+) PARTITIONED BY (partition_column STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE;
+Create an external table:
+----------------------------------------------------------------------------------
+Create an external table
+----------------------------------------------------------------------------------
+
+CREATE EXTERNAL TABLE table_name (
+column_name1 STRING,
+column_name2 INT
+) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE
+LOCATION '/external/location/';
+
+----------------------------------------------------------------------------------
+Create a table like another table:
+----------------------------------------------------------------------------------
+
+CREATE TABLE new_table_name LIKE existing_table_name;
+----------------------------------------------------------------------------------
+List Tables
+----------------------------------------------------------------------------------
+
+List all tables in the current database:
+SHOW TABLES;
+
+Show tables matching a pattern:
+SHOW TABLES 'pattern';
+
+----------------------------------------------------------------------------------
+Alter Table
+----------------------------------------------------------------------------------
+
+Add a column to a table:
+ALTER TABLE table_name ADD COLUMNS (new_column_name STRING);
+
+Change column name and type:
+ALTER TABLE table_name CHANGE old_column_name new_column_name STRING;
+
+Add a partition:
+ALTER TABLE table_name ADD PARTITION (partition_column='partition_value') LOCATION '/path/';
+
+Drop a partition:
+ALTER TABLE table_name DROP PARTITION (partition_column='partition_value');
+
+Rename a table:
+ALTER TABLE old_table_name RENAME TO new_table_name;
+
+----------------------------------------------------------------------------------
+Drop Table
+----------------------------------------------------------------------------------
+
+Drop a table:
+DROP TABLE IF EXISTS table_name;
+
+Drop an external table but keep data:
+DROP TABLE IF EXISTS external_table_name;
+
+Truncate a table (delete all rows but keep schema):
+TRUNCATE TABLE table_name;
+
+Describe Table
+DESCRIBE table structure:
+DESCRIBE table_name;
+
+Describe formatted details of a table (includes partitioning, storage):
+DESCRIBE FORMATTED table_name;
+
+----------------------------------------------------------------------------------
+Data Manipulation Commands
+----------------------------------------------------------------------------------
+
+Inserting Data
+Insert data into a table:
+INSERT INTO TABLE table_name VALUES ('value1', 100);
+
+Insert data into a table using SELECT:
+INSERT INTO TABLE table_name SELECT * FROM another_table;
+
+Insert overwrite (replace existing data):
+INSERT OVERWRITE TABLE table_name SELECT * FROM another_table;
+
+----------------------------------------------------------------------------------
+Loading Data
+----------------------------------------------------------------------------------
+
+Load data from local file system into a table:
+LOAD DATA LOCAL INPATH '/path/to/local/file' INTO TABLE table_name;
+
+Load data from HDFS into a table:
+LOAD DATA INPATH '/path/in/hdfs/file' INTO TABLE table_name;
+
+Load data into a partitioned table:
+LOAD DATA INPATH '/path/in/hdfs/file' INTO TABLE table_name PARTITION (partition_column='partition_value');
+
+----------------------------------------------------------------------------------
+Selecting Data
+----------------------------------------------------------------------------------
+
+Basic select query:
+SELECT * FROM table_name;
+
+Select with filtering:
+SELECT * FROM table_name WHERE column_name='value';
+
+Select specific columns:
+SELECT column_name1, column_name2 FROM table_name;
+
+Limit the number of results:
+SELECT * FROM table_name LIMIT 10;
+
+----------------------------------------------------------------------------------
+Join tables:
+----------------------------------------------------------------------------------
+
+SELECT a.column_name, b.column_name 
+FROM table_a a 
+JOIN table_b b 
+ON a.id = b.id;
+Group by and aggregate:
+
+----------------------------------------------------------------------------------
+
+SELECT department, COUNT(*) 
+FROM employees 
+GROUP BY department;
+
+----------------------------------------------------------------------------------
+Partitions
+----------------------------------------------------------------------------------
+
+Show partitions in a table:
+SHOW PARTITIONS table_name;
+
+
+Add a partition:
+ALTER TABLE table_name ADD PARTITION (partition_column='partition_value') LOCATION '/path/';
+
+
+Drop a partition:
+ALTER TABLE table_name DROP PARTITION (partition_column='partition_value');
+
+----------------------------------------------------------------------------------
+Views
+----------------------------------------------------------------------------------
+
+Create a view:
+CREATE VIEW view_name AS SELECT column_name FROM table_name WHERE condition;
+
+
+Drop a view:
+DROP VIEW IF EXISTS view_name;
+
+
+List all views:
+SHOW VIEWS;
+
+----------------------------------------------------------------------------------
+Indexes
+----------------------------------------------------------------------------------
+
+Create an index on a table column
+CREATE INDEX index_name ON TABLE table_name (column_name) AS 'COMPACT' WITH DEFERRED REBUILD;
+
+
+Drop an index:
+DROP INDEX index_name ON table_name;
+
+----------------------------------------------------------------------------------
+Miscellaneous Hive Commands
+----------------------------------------------------------------------------------
+
+Show current database:
+SELECT current_database();
+
+
+Show current user:
+SELECT current_user();
+
+
+Explain the execution plan of a query:
+EXPLAIN SELECT * FROM table_name;
+
+
+Set Hive parameters:
+SET hive.execution.engine=mr;
+
+
+List all functions:
+SHOW FUNCTIONS;
+
+
+Show specific function description:
+DESCRIBE FUNCTION function_name;
