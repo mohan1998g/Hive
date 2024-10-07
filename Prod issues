@@ -272,3 +272,165 @@ Optimize join keys to minimize skew.
 
 Use Hive Skew Join optimization features to handle skewed data efficiently.
 
+Learn about the known issues in Hive, the impact or changes to the functionality, and the workaround.
+
+CDPD-60862: Rolling restart fails during ZDU when DDL operations are in progress
+During a Zero Downtime Upgrade (ZDU), the rolling restart of services that support Data Definition Language (DDL) statements might fail if DDL operations are in progress during the upgrade. As a result, ensure that you do not run DDL statements during ZDU.
+
+The following services support DDL statements:
+Impala
+Hive – using HiveQL
+Spark – using SparkSQL
+HBase
+Phoenix
+Kafka
+Data Manipulation Lanaguage (DML) statements are not impacted and can be used during ZDU. Following the successful upgrade, you can resume running DDL statements.
+
+None. Cloudera recommends modifying applications to not use DDL statements for the duration of the upgrade. If the upgrade is already in progress, and you have experienced a service failure, you can remove the DDLs in-flight and resume the upgrade from the point of failure.
+CDPD-60770: Beeline Authentication Issue with Special Characters in Passwords
+When LDAP is enabled, users cannot authenticate with Beeline if the password contains a special character. For example, the following string fails:
+beeline -u jdbc:hive2://<host>:<port>/<dbName>;user=user@XXX;password='R3G#xpXyoy1MOJb1'
+Use the -p parameter to execute the Beeline command:
+beeline -u jdbc:hive2://<host>:<port>/<dbName>; -n user@XXX -p 'R3G#xpXyoy1MOJb1'
+CDPD-43769: Inconsistent behavior with CHAR comparisons and string literals
+In Hive, 'char' data to 'string' data comparison is considered as equal, but 'char' data to 'varchar' data comparison is considered as not equal if the data has trailing spaces. For example,
+create table test(colchar char(10), colvarchar varchar(20), colstring string);
+insert into test values ('a ', 'a ', 'a ');
+
+select count(*) from test where colchar = colstring;
+Output returns 1 because char and string data is considered as equal
+
+select count(*) from test where colchar = colvarchar;
+Output returns 0 because char and varchar data is considered as not equal
+It is recommended that you use 'varchar or string' data type instead of 'char' data type for any character or string representation.
+CDPD-44060: Issue rebuilding Hive Materialized Views
+The ALTER MATERIALIZED VIEW <view_name> REBUILD; command to rebuild Materialized View fails with the following error:
+Error: Error while compiling statement: FAILED: SemanticException org.apache.hadoop.hive.ql.parse.SemanticException: Another process is rebuilding the materialized 
+view activecore.top_apps_custom (state=42000,code=40000)
+This can occur if the Materialized View Rebuild command is abruptly killed or if more than one Materialized View Rebuild command is issued for the same Materialized View. As a result, LOCK entry in the backend metastore DB table 'materialization_rebuild_locks' is not deleted and when the command is issued again, it will fail for that Materialized View.
+To resolve this issue, perform the following steps to manually delete the stale locks:
+From the backend DB, run the following command and check if there are any entries for the view to confirm if stale locks are present:
+select mrl_db_name, mrl_tbl_name, mrl_last_heartbeat from materialization_rebuild_locks where lower(mrl_tbl_name)='<view_name>';
+Create a backup of the table if there are multiple entries:
+create table bkp_top_apps_custom as
+select mrl_db_name, mrl_tbl_name, mrl_last_heartbeat from materialization_rebuild_locks where lower(mrl_tbl_name)='<view_name>';
+Delete the stale lock entries from the table:
+delete from materialization_rebuild_locks where lower(mrl_tbl_name)='<view_name>';
+For more information, see the related Cloudera Community article.
+
+CDPD-42726: Wrong results for agg queries from stats after running multi-insert query on managed table
+Multiple inserts at the same time into the same partition results in invalid stats. For example:
+create table source(p int, key int, value string);
+insert into source(p, key, value) values (101,42,'string42');
+
+create table stats_part(key int,value string) partitioned by (p int);
+
+from source
+insert into stats_part select key, value, p
+insert into stats_part select key, value, p;
+
+select count(*) from stats_part;
+
+-- In this scenario, StatsOptimizer helps serving this query because the result should be rowNum of the partition p=101.
+-- The result is 1, however, the result should be 2.
+Rewrite the multi-insert statement by merging the branches inserting into the same partition to one branch.
+CDPD-57574: Query execution fails due to NullPointerException in DagUtils.setupQuickStart
+Hive queries may fail at runtime with a NullPointerException while executing the Tez graph at DagUtils.setupQuickStart method. A part of the stack trace from the error is shown below:
+ERROR : Failed to execute tez graph.
+java.lang.NullPointerException: null at org.apache.hadoop.hive.ql.exec.tez.DagUtils.setupQuickStart(DagUtils.java:1724)
+The error usually occurs from an invalid plan that has cycles created by semi-join or map-join edges.
+Disable some of the optimizations in order to remove the cycles from the plan. It is sufficient to set one of the following properties:
+set hive.tez.dynamic.partition.pruning=false;
+set hive.tez.dynamic.semijoin.reduction=false;
+set hive.auto.convert.join=false;
+To avoid any undesired performance regressions, disable the optimization(s) only for specific queries and not globally (through Cloudera Manager) for the whole workload or cluster.
+
+CDPD-43107: SemanticException for INSERT INTO statement when Hive Cost-based Optimizer (CBO) is disabled
+If you are running the INSERT INTO query and hive.cbo.enable is set to "false", the query fails with a SemanticException. For example,
+set hive.cbo.enable=false;
+
+CREATE TABLE mytable (
+id INT,
+str STRING
+);
+
+INSERT INTO mytable (id, str) VALUES (1, 'a');
+Output:
+org.apache.hadoop.hive.ql.parse.SemanticException: 0:0 Expected 2 columns for insclause-0/default@mytable; select produces 1 columns. Error encountered near token ''a''
+This issue occurs only when columns are specified for the target table in the query. INSERT INTO mytable values (1, 'a'); does not result in an exception.
+
+Enable CBO and run the query.
+CDPD-43957: HiveServer shuts down during replication due to high resource usage
+During Hive replication (both bootstrap and incremental), you may notice that the HiveServer (HS2) shuts down periodically with the following error:
+java.sql.SQLException: org.apache.hive.jdbc.ZooKeeperHiveClientException: Unable to read HiveServer2 configs from ZooKeeper
+	at org.apache.hive.jdbc.HiveConnection.<init>(HiveConnection.java:265)
+	at org.apache.hive.jdbc.HiveDriver.connect(HiveDriver.java:107)
+	at java.sql.DriverManager.getConnection(DriverManager.java:664)
+	at java.sql.DriverManager.getConnection(DriverManager.java:247)
+	at com.cloudera.enterprise.hive3qt.Hive3QueryTool$HiveOperation.execute(Hive3QueryTool.java:682)
+	at com.cloudera.enterprise.hive3qt.Hive3QueryTool.main(Hive3QueryTool.java:935)
+Caused by: org.apache.hive.jdbc.ZooKeeperHiveClientException: Unable to read HiveServer2 configs from ZooKeeper
+	at org.apache.hive.jdbc.ZooKeeperHiveClientHelper.configureConnParams(ZooKeeperHiveClientHelper.java:177)
+	at org.apache.hive.jdbc.Utils.configureConnParamsFromZooKeeper(Utils.java:580)
+	at org.apache.hive.jdbc.Utils.parseURL(Utils.java:391)
+	at org.apache.hive.jdbc.HiveConnection.<init>(HiveConnection.java:263)
+	... 5 more
+Caused by: org.apache.hive.jdbc.ZooKeeperHiveClientException: Tried all existing HiveServer2 uris from ZooKeeper.
+	at org.apache.hive.jdbc.ZooKeeperHiveClientHelper.getServerHosts(ZooKeeperHiveClientHelper.java:132)
+	at org.apache.hive.jdbc.ZooKeeperHiveClientHelper.configureConnParams(ZooKeeperHiveClientHelper.java:172)
+	... 8 mor
+This issue occurs when you replicate at scale with an unbalanced cluster setup that has all the roles running on the Cloudera Manager host. As a result, Cloudera Manager ends up in a bottleneck situation because HS2 crashes, preventing further replication. The logs (/var/log/messages) indicate that there were a large number of Java processes running on the host, which exhausted the host's memory and triggered an Out Of Memory Killer process to stop HS2.
+
+You can restart HS2 and reinitiate replication. However, the replication process may take a longer time to complete.
+
+Follow these recommendations when setting up your source and target clusters:
+Ensure that no HS2, Hive metastore (HMS), DataNode, or NameNode roles are running on the Cloudera Manager host.
+Ensure that you have multiple instances of HS2 and HMS roles on different nodes.
+It is recommended that you have the HS2 and HMS roles on different nodes than the DataNodes or NameNodes.
+These practices increase the possibility of Hive replication at scale completing successfully.
+
+Limit the scale of Hive replication by temporarily disabling replication policies.
+CDPD-40730: Parquet change can cause incompatibility
+Parquet files written by the parquet-mr library in CDP 7.1.9, where the schema contains a timestamp with no UTC conversion will not be compatible with older versions of Parquet readers. The effect is that the older versions will still consider these timestamps as they would require UTC conversions and will thus end up with a wrong result. You can encounter this problem only when you write Parquet-based tables using Hive, and tables have the non-default configuration hive.parquet.write.int64.timestamp=true.
+None.
+CDPD-41274: HWC + Oozie issue: Could not open client transport with JDBC Uri
+Currently only Spark cluster mode is supported in the Oozie Spark Action with Hive Warehouse Connector (HWC).
+Use Spark action in cluster mode.
+<spark xmlns="uri:oozie:spark-action:1.0">
+            ...
+            <mode>cluster</mode>
+            ...
+            </spark>
+CDPD-26556 After an upgrade, querying a CTAS table under certain conditions might throw an exception
+If you upgrade your Hive cluster from CDH 6 to CDP 7, create a CTAS table in the CDP cluster from a table you upgraded from CDH, you might see the following exception when you query the new table:
+class org.apache.hadoop.io.IntWritable cannot be cast to class org.apache.hadoop.hive.serde2.objectinspector.StandardUnionObjectInspector$StandardUnion        
+This issue involves CDH-based tables having columns of complex types ARRAY, MAP, and STRUCT.
+
+CDPD-23506: OutOfMemoryError in LLAP
+Long running spark-shell applications can leave sessions in interactive Hiveserver2 until the Spark application finishes (user exists from spark-shell), causing memory pressure in case of a high number of queries in the same shell (1000+).
+You must close spark-shell so that sessions are closed. Add the owner of the database or the tables as a user with read or read/write access to the tables directly.
+CDPD-23041: DROP TABLE on a table having an index does not work
+If you migrate a Hive table to CDP having an index, DROP TABLE does not drop the table. Hive no longer supports indexes (HIVE-18448). A foreign key constraint on the indexed table prevents dropping the table. Attempting to drop such a table results in the following error:
+java.sql.BatchUpdateException: Cannot delete or update a parent row: a foreign key constraint fails ("hive"."IDXS", CONSTRAINT "IDXS_FK1" FOREIGN KEY ("ORIG_TBL_ID") REFERENCES "TBLS ("TBL_ID"))
+There are two workarounds:
+Drop the foreign key "IDXS_FK1" on the "IDXS" table within the metastore. You can also manually drop indexes, but do not cascade any drops because the IDXS table includes references to "TBLS".
+Launch an older version of Hive, such as Hive 2.3 that includes IDXS in the DDL, and then drop the indexes as described in Language Manual Indexing.
+Apache Issue: Hive-24815
+CDPD-17766: Queries fail when using spark.sql.hive.hiveserver2.jdbc.url.principal in the JDBC URL to invoke Hive.
+Do not specify spark.sql.hive.hiveserver2.jdbc.url.principal in the JDBC URL to invoke Hive remotely.
+Workaround: specify principal=hive.server2.authentication.kerberos.principal as shown in the following syntax:
+jdbc:hive://<host>:<port>/<dbName>;principal=hive.server2.authentication.kerberos.principal;<otherSessionConfs>?<hiveConfs>#<hiveVars>
+CDPD-13636: Hive job fails with OutOfMemory exception in the Azure DE cluster
+Set the parameter hive.optimize.sort.dynamic.partition.threshold=0. Add this parameter in Cloudera Manager (Hive Service Advanced Configuration Snippet (Safety Valve) for hive-site.xml)
+CDPD-10848: HiveServer Web UI displays incorrect data
+If you enabled auto-TLS for TLS encryption, the HiveServer2 Web UI does not display the correct data in the following tables: Active Sessions, Open Queries, Last Max n Closed Queries
+Technical Service Bulletins
+TSB 2021-501: JOIN queries return wrong result for join keys with large size in Hive
+JOIN queries return wrong results when performing joins on large size keys (larger than 255 bytes). This happens when the fast hash table join algorithm is enabled, which is enabled by default.
+Knowledge article
+For the latest update on this issue, see the corresponding Knowledge article: TSB 2021-501: JOIN queries return wrong result for join keys with large size in Hive
+TSB 2023-702: Potential wrong result for queries with date partition filter for clusters in GMT+ timezone
+In Cloudera Data Platform (CDP) Private Cloud Base 7.1.7 Service Pack (SP) 2 Cumulative Hotfix (CHF) 11, a fix was introduced in Hive Metastore (HMS) to address a parsing issue with date strings. This fix caused a regression in Hive clusters where the HMS time zone is set ahead of GMT for the following combination of tables and queries: a table that is partitioned on a DATE column and a SELECT query on that table containing a WHERE clause filter on the same DATE column. For such queries, during the partition pruning phase, the date string would be converted to a date without timezone and compared with the partition value retrieved by HMS. This causes wrong results (0 rows) because the date values do not match.
+The regression was identified in CDP Private Cloud Base 7.1.7 SP2 CHF14, but it exists in CHF11 through CHF16 as well as on certain versions of 7.1.8 and 7.1.9.
+
+This issue does not affect clusters where the time zones are behind GMT. For example, if the time zone of the cluster is set USA/Los Angeles, which is 8 hours behind GMT, a date ‘2023-10-02’ will remain as ‘2023-10-02’ after converting to GMT (adding 8 hours). On the other hand, using Asia/Hong Kong time as an example, which is 8 hours ahead of GMT, the same date would become ‘2023-10-01’ after converting to GMT (subtracting 8 hours), which leads to the wrong results.
