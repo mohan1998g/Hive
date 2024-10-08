@@ -1,0 +1,138 @@
+When you create a Hive table on data with a schema that differs from the table's schema definition, several things can happen depending on the type of table (whether it’s external or managed) and how the schema mismatch is handled by Hive.
+
+1. Table Types: External vs. Managed
+Managed Table: Hive controls both the table metadata and the data files. If you drop the table, the data is also deleted.
+External Table: Hive manages only the metadata, but the data itself remains outside Hive’s control. Dropping the table only removes the metadata; the data remains intact.
+2. Schema-on-Read in Hive
+Hive follows a schema-on-read model. This means the schema is applied only when the data is read, not when the table is created. The data itself isn’t validated against the schema during table creation. This can lead to the following scenarios when the data schema differs from the table schema.
+
+Possible Scenarios:
+Scenario 1: Extra Columns in the Data
+If the data has more columns than the Hive table schema defines:
+
+Hive will ignore any extra columns in the data that aren’t defined in the table schema.
+Only the columns defined in the Hive schema will be read, and the extra columns will not be accessible in queries.
+Example:
+Data: id,name,age,city
+
+Table Schema: id INT, name STRING
+
+When querying the table, only id and name are returned, and the age and city fields will be ignored.
+
+Scenario 2: Fewer Columns in the Data
+If the data has fewer columns than the Hive table schema expects:
+
+The columns that are missing in the data but defined in the table schema will return NULL values when queried.
+Example:
+Data: id,name
+
+Table Schema: id INT, name STRING, age INT
+
+When querying the table, the age column will return NULL because the data does not provide values for it.
+
+Scenario 3: Type Mismatch Between Table and Data
+If the data contains a type mismatch for a column (for example, the table schema expects an INT, but the data contains a STRING):
+
+Hive will attempt to cast the data to the expected type. If the cast is successful, Hive will use the cast value.
+If the cast fails (e.g., trying to convert a non-numeric string to an INT), Hive will return NULL for that column.
+Example:
+Data: id,name
+
+Table Schema: id INT, name STRING
+
+If the id column in the data contains non-numeric values like "abc," Hive will return NULL for that row's id.
+
+Scenario 4: Partitioned Table with Mismatched Schema
+In partitioned tables, if different partitions have different schemas (for example, one partition has extra columns), Hive will:
+
+Use the schema defined in the table metadata.
+When querying partitions with extra columns, the extra columns will be ignored.
+If partitions have fewer columns, the missing columns will return NULL values.
+Scenario 5: Data with Complex Types (Arrays, Structs)
+If the data includes complex types like arrays or structs, but the Hive table schema does not define them, Hive will ignore these complex structures when reading the data. Conversely, if the Hive table defines a complex type but the data does not contain it, Hive will return NULL for those fields.
+
+3. Examples of Behavior with Different Schemas
+Example 1: Extra Columns in Data
+Data:
+
+ 
+1,John,25,New York
+2,Alice,30,San Francisco
+Table Schema:
+
+ 
+CREATE EXTERNAL TABLE person (id INT, name STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ',';
+Query Result:
+
+diff
+Copy code
++---+-----+
+| id| name|
++---+-----+
+|  1| John|
+|  2|Alice|
++---+-----+
+The extra columns (age and city) in the data are ignored.
+
+Example 2: Fewer Columns in Data
+Data:
+
+Copy code
+1,John
+2,Alice
+Table Schema:
+
+ 
+CREATE EXTERNAL TABLE person (id INT, name STRING, age INT)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ',';
+Query Result:
+
+ 
++---+-----+----+
+| id| name| age|
++---+-----+----+
+|  1| John|NULL|
+|  2|Alice|NULL|
++---+-----+----+
+The age column in the table returns NULL since the data does not contain values for it.
+
+Example 3: Type Mismatch
+Data:
+
+Copy code
+abc,John
+2,Alice
+Table Schema:
+
+ 
+CREATE EXTERNAL TABLE person (id INT, name STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ',';
+Query Result:
+
+ 
++----+-----+
+| id | name|
++----+-----+
+|null| John|
+|   2|Alice|
++----+-----+
+The first row's id returns NULL because "abc" cannot be cast to an integer.
+
+4. Best Practices for Handling Schema Mismatches in Hive
+Schema Evolution: If your data schema evolves over time (i.e., new columns are added), you can enable schema evolution to handle changes automatically. Hive supports schema evolution for certain file formats like Parquet and ORC, which allows Hive to read older data formats with fewer columns.
+
+Use Compatible File Formats: Use columnar file formats like Parquet or ORC to store data. These formats store schema information with the data, making it easier for Hive to manage schema evolution and type casting.
+
+Validate Data: Ensure that the data you load into Hive tables conforms to the table schema. Tools like Apache NiFi or Apache Spark can help clean and validate data before loading it into Hive.
+
+Handling Complex Data: If your data has complex types (arrays, structs, maps), ensure that your Hive table schema correctly reflects these types. Hive can manage nested and complex types, but schema mismatches in these cases can be harder to debug.
+
+Conclusion:
+Hive's schema-on-read model means that data mismatches are handled at query time rather than when the table is created.
+Extra columns in the data will be ignored, while missing columns will return NULL values.
+Type mismatches may result in casting issues, and if the cast fails, NULL values are returned.
+For complex schemas or frequent schema evolution, formats like Parquet or ORC are recommended to handle schema evolution effectively.
