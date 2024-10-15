@@ -1,0 +1,24 @@
+The ACID properties are a set of principles that guarantee reliable transactions in a database system. 
+ACID stands for Atomicity, Consistency, Isolation, and Durability, and these properties apply to various data management systems like SQL databases, Hive, and PySpark. 
+Here's how they are interpreted and handled in these systems:
+
+ACID in Hive
+Apache Hive originally didn’t have full ACID compliance because it was designed for batch processing. 
+However, starting with Hive 0.14.0, Hive introduced ACID-compliant transactions to support insert, update, and delete operations, providing more traditional database behavior.
+
+Atomicity:
+Definition: In Hive, atomicity is ensured by executing a transaction as an all-or-nothing operation.
+Hive: With ACID tables, Hive ensures that either all changes in a transaction are applied or none are. This is handled via transaction managers and locks.
+Consistency:
+Definition: The database maintains valid states, ensuring that all data complies with constraints.
+Hive: Hive enforces data consistency through transactional tables and internal checks, but it does not have as extensive constraint mechanisms as traditional SQL databases.
+Isolation:
+Definition: Transactions are isolated from each other, so intermediate changes are not visible to other transactions.
+Hive: Hive supports isolation by using a locking mechanism where transactions acquire locks on partitions. 
+This allows multiple transactions to operate concurrently on different partitions but prevents conflicts on the same partition.
+Durability:
+Definition: Once committed, transactions are stored persistently, even in case of failure.
+Hive: Hive uses write-ahead logs and HDFS (Hadoop Distributed File System) to ensure that committed data is durable and will persist across system failures.
+Caveat:
+Hive’s ACID properties are only available for ORC (Optimized Row Columnar) formatted tables and not other formats like Parquet or Avro. 
+Also, full ACID support requires Hive transactional tables to be enabled (transactional = true).
